@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Enhanced Tilting Maze</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="https://i.ibb.co/M6KTWnf/pic.jpg" />
+    <style>
+        :root {
+            --bg-color: #ede6e3;
+            --wall-color: #36382e;
+            --joystick-color: #210124;
+            --joystick-head-color: #f06449;
+            --ball-color: #f06449;
+            --end-color: #7d82b8;
+            --text-color: #210124;
+            --hole-color: #000;
+            --success-color: #4caf50;
+            --danger-color: #f44336;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-color);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            position: relative;
+        }
+
+        #game {
+            display: grid;
+            grid-template-columns: auto 180px;
+            grid-template-rows: auto 1fr auto;
+            gap: 30px;
+            perspective: 800px;
+            max-width: 90vw;
+            max-height: 90vh;
+        }
+
+        #maze {
+            position: relative;
+            grid-row: 1 / -1;
+            grid-column: 1;
+            width: 400px;
+            height: 360px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.1s ease-out;
+            transform-style: preserve-3d;
+        }
+
+        #end {
+            width: 70px;
+            height: 70px;
+            border: 4px dashed var(--end-color);
+            border-radius: 50%;
+            position: relative;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+        }
+
+        .ball {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #ff7a5c, var(--ball-color));
+            margin: -6px 0 0 -6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            z-index: 10;
+        }
+
+        .ball.in-center {
+            transform: scale(0.8);
+            opacity: 0.7;
+        }
+
+        .wall {
+            position: absolute;
+            background: linear-gradient(135deg, var(--wall-color), #2a2c22);
+            transform-origin: top center;
+            margin-left: -5px;
+            border-radius: 2px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+
+        .wall::before,
+        .wall::after {
+            content: "";
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: inherit;
+            border-radius: 50%;
+            left: -1px;
+        }
+
+        .wall::before { top: -6px; }
+        .wall::after { bottom: -6px; }
+
+        .black-hole {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #333, var(--hole-color));
+            margin: -10px 0 0 -10px;
+            animation: blackHole 3s infinite;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        @keyframes blackHole {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .black-hole.danger {
+            background: radial-gradient(circle at 30% 30%, #ff6b6b, var(--danger-color));
+            animation: danger 0.2s infinite;
+        }
+
+        @keyframes danger {
+            0%, 100% { transform: scale(1.1); }
+            50% { transform: scale(1.3); }
+        }
+
+        #controls {
+            grid-column: 2;
+            grid-row: 1 / -1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        #joystick {
+            position: relative;
+            background: radial-gradient(circle at 30% 30%, #3a0f3d, var(--joystick-color));
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        #joystick-head {
+            position: relative;
+            background: radial-gradient(circle at 30% 30%, #ff7a5c, var(--joystick-head-color));
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: grab;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        #joystick-head:hover {
+            transform: scale(1.1);
+        }
+
+        #joystick-head:active {
+            cursor: grabbing;
+            transform: scale(0.95);
+        }
+
+        .joystick-arrow {
+            position: absolute;
+            width: 0;
+            height: 0;
+            opacity: 0.7;
+        }
+
+        .joystick-arrow:nth-of-type(1) {
+            bottom: 70px;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 8px solid var(--joystick-color);
+        }
+
+        .joystick-arrow:nth-of-type(2) {
+            top: 70px;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 8px solid var(--joystick-color);
+        }
+
+        .joystick-arrow:nth-of-type(3) {
+            left: 70px;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            border-left: 8px solid var(--joystick-color);
+        }
+
+        .joystick-arrow:nth-of-type(4) {
+            right: 70px;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            border-right: 8px solid var(--joystick-color);
+        }
+
+        #ui-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+        }
+
+        #stats {
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            min-width: 140px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .stat-item {
+            margin: 5px 0;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            color: var(--joystick-head-color);
+            font-weight: bold;
+        }
+
+        #note {
+            text-align: center;
+            font-size: 14px;
+            color: var(--text-color);
+            transition: all 0.3s ease;
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: 10px;
+            line-height: 1.4;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 160px;
+        }
+
+        #note.success {
+            background: rgba(76,175,80,0.1);
+            border: 2px solid var(--success-color);
+        }
+
+        #note.danger {
+            background: rgba(244,67,54,0.1);
+            border: 2px solid var(--danger-color);
+        }
+
+        .controls-hint {
+            font-size: 11px;
+            opacity: 0.7;
+            text-align: center;
+            margin-top: 8px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--joystick-head-color), #ff7a5c);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        @keyframes glow {
+            0% { transform: scale(1); box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+            100% { transform: scale(1.1); box-shadow: 0 4px 8px rgba(240,100,73,0.4); }
+        }
+
+        .glow-animation {
+            animation: glow 0.8s ease-in-out infinite alternate;
+        }
+
+        @media (max-width: 768px) {
+            #game {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto;
+                gap: 20px;
+            }
+            
+            #controls {
+                grid-column: 1;
+                grid-row: 2;
+                flex-direction: row;
+                justify-content: space-around;
+            }
+            
+            #maze {
+                grid-row: 1;
+                grid-column: 1;
+                width: min(350px, 90vw);
+                height: min(315px, 50vh);
+            }
+            
+            #note {
+                grid-row: 3;
+                grid-column: 1;
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="game">
+            <div id="maze">
+                <div id="end"></div>
+            </div>
+            
+            <div id="controls">
+                <div id="joystick">
+                    <div class="joystick-arrow"></div>
+                    <div class="joystick-arrow"></div>
+                    <div class="joystick-arrow"></div>
+                    <div class="joystick-arrow"></div>
+                    <div id="joystick-head" class="glow-animation"></div>
+                </div>
+                
+                <div id="ui-panel">
+                    <div id="stats">
+                        <div class="stat-item">Time: <span class="stat-value" id="timer">0:00</span></div>
+                        <div class="stat-item">Balls: <span class="stat-value" id="balls-count">0/4</span></div>
+                        <div class="stat-item">Best: <span class="stat-value" id="best-time">--:--</span></div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill"></div>
+                        </div>
+                    </div>
+                    
+                    <div id="note">
+                        Click the joystick to start!
+                        <p>Move all balls to center</p>
+                        <div class="controls-hint">H: Hard | E: Easy | Space: Reset</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Math utilities
+        Math.minmax = (value, limit) => Math.max(Math.min(value, limit), -limit);
+        
+        const distance2D = (p1, p2) => Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
+        
+        const getAngle = (p1, p2) => {
+            let angle = Math.atan((p2.y - p1.y) / (p2.x - p1.x));
+            if (p2.x - p1.x < 0) angle += Math.PI;
+            return angle;
+        };
+
+        const closestItCanBe = (cap, ball) => {
+            const angle = getAngle(cap, ball);
+            const deltaX = Math.cos(angle) * (wallW / 2 + ballSize / 2);
+            const deltaY = Math.sin(angle) * (wallW / 2 + ballSize / 2);
+            return { x: cap.x + deltaX, y: cap.y + deltaY };
+        };
+
+        const rollAroundCap = (cap, ball) => {
+            const impactAngle = getAngle(ball, cap);
+            const heading = getAngle({ x: 0, y: 0 }, { x: ball.velocityX, y: ball.velocityY });
+            const impactHeadingAngle = impactAngle - heading;
+            
+            const velocityMagnitude = distance2D({ x: 0, y: 0 }, { x: ball.velocityX, y: ball.velocityY });
+            const velocityMagnitudeDiagonalToTheImpact = Math.sin(impactHeadingAngle) * velocityMagnitude;
+            const closestDistance = wallW / 2 + ballSize / 2;
+            const rotationAngle = Math.atan(velocityMagnitudeDiagonalToTheImpact / closestDistance);
+            
+            const deltaFromCap = {
+                x: Math.cos(impactAngle + Math.PI - rotationAngle) * closestDistance,
+                y: Math.sin(impactAngle + Math.PI - rotationAngle) * closestDistance,
+            };
+
+            return {
+                x: ball.x,
+                y: ball.y,
+                velocityX: ball.x - (cap.x + deltaFromCap.x),
+                velocityY: ball.y - (cap.y + deltaFromCap.y),
+                nextX: ball.x + (ball.x - (cap.x + deltaFromCap.x)),
+                nextY: ball.y + (ball.y - (cap.y + deltaFromCap.y))
+            };
+        };
+
+        const slow = (number, difference) => {
+            if (Math.abs(number) <= difference) return 0;
+            return number > difference ? number - difference : number + difference;
+        };
+
+        // Game elements
+        const mazeElement = document.getElementById("maze");
+        const joystickHead = document.getElementById("joystick-head");
+        const noteElement = document.getElementById("note");
+        const timerElement = document.getElementById("timer");
+        const ballsCountElement = document.getElementById("balls-count");
+        const bestTimeElement = document.getElementById("best-time");
+        const progressFillElement = document.getElementById("progress-fill");
+
+        // Game constants
+        const pathW = 25;
+        const wallW = 10;
+        const ballSize = 12;
+        const holeSize = 20;
+
+        // Game state
+        let gameInProgress = false;
+        let hardMode = false;
+        let startTime = null;
+        let bestTime = localStorage.getItem('mazeBestTime') || null;
+        let mouseStartX, mouseStartY;
+        let accelerationX = 0, accelerationY = 0;
+        let frictionX = 0, frictionY = 0;
+        let previousTimestamp;
+
+        let balls = [];
+        let ballElements = [];
+        let holeElements = [];
+        let walls = [];
+
+        // Wall configuration
+        const wallsConfig = [
+            // Border walls
+            { column: 0, row: 0, horizontal: true, length: 10 },
+            { column: 0, row: 0, horizontal: false, length: 9 },
+            { column: 0, row: 9, horizontal: true, length: 10 },
+            { column: 10, row: 0, horizontal: false, length: 9 },
+            
+            // Interior walls
+            { column: 0, row: 6, horizontal: true, length: 1 },
+            { column: 0, row: 8, horizontal: true, length: 1 },
+            { column: 1, row: 1, horizontal: true, length: 2 },
+            { column: 1, row: 7, horizontal: true, length: 1 },
+            { column: 2, row: 2, horizontal: true, length: 2 },
+            { column: 2, row: 4, horizontal: true, length: 1 },
+            { column: 2, row: 5, horizontal: true, length: 1 },
+            { column: 2, row: 6, horizontal: true, length: 1 },
+            { column: 3, row: 3, horizontal: true, length: 1 },
+            { column: 3, row: 8, horizontal: true, length: 3 },
+            { column: 4, row: 6, horizontal: true, length: 1 },
+            { column: 5, row: 2, horizontal: true, length: 2 },
+            { column: 5, row: 7, horizontal: true, length: 1 },
+            { column: 6, row: 1, horizontal: true, length: 1 },
+            { column: 6, row: 6, horizontal: true, length: 2 },
+            { column: 7, row: 3, horizontal: true, length: 2 },
+            { column: 7, row: 7, horizontal: true, length: 2 },
+            { column: 8, row: 1, horizontal: true, length: 1 },
+            { column: 8, row: 2, horizontal: true, length: 1 },
+            { column: 8, row: 3, horizontal: true, length: 1 },
+            { column: 8, row: 4, horizontal: true, length: 2 },
+            { column: 8, row: 8, horizontal: true, length: 2 },
+            
+            // Vertical walls
+            { column: 1, row: 1, horizontal: false, length: 2 },
+            { column: 1, row: 4, horizontal: false, length: 2 },
+            { column: 2, row: 2, horizontal: false, length: 2 },
+            { column: 2, row: 5, horizontal: false, length: 1 },
+            { column: 2, row: 7, horizontal: false, length: 2 },
+            { column: 3, row: 0, horizontal: false, length: 1 },
+            { column: 3, row: 4, horizontal: false, length: 1 },
+            { column: 3, row: 6, horizontal: false, length: 2 },
+            { column: 4, row: 1, horizontal: false, length: 2 },
+            { column: 4, row: 6, horizontal: false, length: 1 },
+            { column: 5, row: 0, horizontal: false, length: 2 },
+            { column: 5, row: 6, horizontal: false, length: 1 },
+            { column: 5, row: 8, horizontal: false, length: 1 },
+            { column: 6, row: 4, horizontal: false, length: 1 },
+            { column: 6, row: 6, horizontal: false, length: 1 },
+            { column: 7, row: 1, horizontal: false, length: 4 },
+            { column: 7, row: 7, horizontal: false, length: 2 },
+            { column: 8, row: 2, horizontal: false, length: 1 },
+            { column: 8, row: 4, horizontal: false, length: 2 },
+            { column: 9, row: 1, horizontal: false, length: 1 },
+            { column: 9, row: 5, horizontal: false, length: 2 }
+        ];
+
+        const holesConfig = [
+            { column: 0, row: 5 },
+            { column: 2, row: 0 },
+            { column: 2, row: 4 },
+            { column: 4, row: 6 },
+            { column: 6, row: 2 },
+            { column: 6, row: 8 },
+            { column: 8, row: 1 },
+            { column: 8, row: 2 }
+        ];
+
+        function updateBestTime() {
+            if (bestTime) {
+                const minutes = Math.floor(bestTime / 60);
+                const seconds = bestTime % 60;
+                bestTimeElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            } else {
+                bestTimeElement.textContent = '--:--';
+            }
+        }
+
+        function updateTimer() {
+            if (gameInProgress && startTime) {
+                const currentTime = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(currentTime / 60);
+                const seconds = currentTime % 60;
+                timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+        }
+
+        function updateProgress() {
+            const ballsInCenter = balls.filter(ball => {
+                const centerDistance = distance2D(ball, { x: 200, y: 180 });
+                return centerDistance < 35;
+            }).length;
+            
+            const progress = (ballsInCenter / balls.length) * 100;
+            progressFillElement.style.width = `${progress}%`;
+            ballsCountElement.textContent = `${ballsInCenter}/${balls.length}`;
+            
+            return ballsInCenter;
+        }
+
+        function resetGame() {
+            gameInProgress = false;
+            startTime = null;
+            previousTimestamp = undefined;
+            mouseStartX = undefined;
+            mouseStartY = undefined;
+            accelerationX = 0;
+            accelerationY = 0;
+            frictionX = 0;
+            frictionY = 0;
+
+            // Clear existing elements
+            ballElements.forEach(el => el.remove());
+            holeElements.forEach(el => el.remove());
+            document.querySelectorAll('.wall').forEach(el => el.remove());
+            
+            ballElements = [];
+            holeElements = [];
+
+            // Reset maze rotation
+            mazeElement.style.transform = 'rotateY(0deg) rotateX(0deg)';
+            joystickHead.style.transform = '';
+            joystickHead.classList.add('glow-animation');
+
+            // Create walls
+            walls = wallsConfig.map(wall => ({
+                x: wall.column * (pathW + wallW),
+                y: wall.row * (pathW + wallW),
+                horizontal: wall.horizontal,
+                length: wall.length * (pathW + wallW)
+            }));
+
+            walls.forEach(({ x, y, horizontal, length }) => {
+                const wall = document.createElement("div");
+                wall.className = "wall";
+                wall.style.cssText = `
+                    left: ${x}px;
+                    top: ${y}px;
+                    width: ${wallW}px;
+                    height: ${length}px;
+                    transform: rotate(${horizontal ? -90 : 0}deg);
+                `;
+                mazeElement.appendChild(wall);
+            });
+
+            // Initialize balls
+            balls = [
+                { column: 0, row: 0 },
+                { column: 9, row: 0 },
+                { column: 0, row: 8 },
+                { column: 9, row: 8 }
+            ].map(ball => ({
+                x: ball.column * (wallW + pathW) + (wallW / 2 + pathW / 2),
+                y: ball.row * (wallW + pathW) + (wallW / 2 + pathW / 2),
+                velocityX: 0,
+                velocityY: 0
+            }));
+
+            // Create ball elements
+            balls.forEach((ball) => {
+                const ballEl = document.createElement("div");
+                ballEl.className = "ball";
+                ballEl.style.left = `${ball.x}px`;
+                ballEl.style.top = `${ball.y}px`;
+                mazeElement.appendChild(ballEl);
+                ballElements.push(ballEl);
+            });
+
+            // Create holes in hard mode
+            if (hardMode) {
+                holesConfig.forEach(hole => {
+                    const x = hole.column * (wallW + pathW) + (wallW / 2 + pathW / 2);
+                    const y = hole.row * (wallW + pathW) + (wallW / 2 + pathW / 2);
+                    
+                    const holeEl = document.createElement("div");
+                    holeEl.className = "black-hole";
+                    holeEl.style.left = `${x}px`;
+                    holeEl.style.top = `${y}px`;
+                    mazeElement.appendChild(holeEl);
+                    holeElements.push(holeEl);
+                });
+            }
+
+            updateUI();
+            updateBestTime();
+        }
+
+        function updateUI() {
+            const modeText = hardMode ? "Avoid black holes!" : "Move all balls to center";
+            const controlsText = hardMode ? "E: Easy | Space: Reset" : "H: Hard | Space: Reset";
+            
+            noteElement.innerHTML = `
+                ${gameInProgress ? modeText : "Click joystick to start!"}
+                <p>${modeText}</p>
+                <div class="controls-hint">${controlsText}</div>
+            `;
+            
+            noteElement.className = hardMode ? 'danger' : '';
+            updateProgress();
+        }
+
+        // Event listeners
+        joystickHead.addEventListener("mousedown", startGame);
+        joystickHead.addEventListener("touchstart", startGame, { passive: false });
+
+        function startGame(event) {
+            event.preventDefault();
+            if (!gameInProgress) {
+                const clientX = event.clientX || event.touches[0].clientX;
+                const clientY = event.clientY || event.touches[0].clientY;
+                mouseStartX = clientX;
+                mouseStartY = clientY;
+                gameInProgress = true;
+                startTime = Date.now();
+                joystickHead.classList.remove('glow-animation');
+                requestAnimationFrame(gameLoop);
+                updateUI();
+            }
+        }
+
+        window.addEventListener("mousemove", handleMove);
+        window.addEventListener("touchmove", handleMove, { passive: false });
+
+        function handleMove(event) {
+            if (!gameInProgress) return;
+            
+            event.preventDefault();
+            const clientX = event.clientX || event.touches[0].clientX;
+            const clientY = event.clientY || event.touches[0].clientY;
+            
+            const mouseDeltaX = -Math.minmax(mouseStartX - clientX, 20);
+            const mouseDeltaY = -Math.minmax(mouseStartY - clientY, 20);
+
+            joystickHead.style.transform = `translate(${mouseDeltaX}px, ${mouseDeltaY}px)`;
+
+            const rotationY = mouseDeltaX * 0.6;
+            const rotationX = mouseDeltaY * 0.6;
+
+            mazeElement.style.transform = `rotateY(${rotationY}deg) rotateX(${-rotationX}deg)`;
+
+            const gravity = 1.8;
+            const friction = 0.015;
+
+            accelerationX = gravity * Math.sin((rotationY / 180) * Math.PI);
+            accelerationY = gravity * Math.sin((rotationX / 180) * Math.PI);
+            frictionX = gravity * Math.cos((rotationY / 180) * Math.PI) * friction;
+            frictionY = gravity * Math.cos((rotationX / 180) * Math.PI) * friction;
+        }
+
+        window.addEventListener("keydown", function(event) {
+            const key = event.key.toLowerCase();
+            
+            if (![" ", "h", "e"].includes(key)) return;
+            event.preventDefault();
+
+            switch(key) {
+                case " ":
+                    resetGame();
+                    break;
+                case "h":
+                    hardMode = true;
+                    resetGame();
+                    break;
+                case "e":
+                    hardMode = false;
+                    resetGame();
+                    break;
+            }
+        });
+
+        function gameLoop(timestamp) {
+            if (!gameInProgress) return;
+
+            if (!previousTimestamp) {
+                previousTimestamp = timestamp;
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+
+            const timeElapsed = (timestamp - previousTimestamp) / 16;
+            const maxVelocity = 1.8;
+
+            try {
+                const velocityChangeX = accelerationX * timeElapsed;
+                const velocityChangeY = accelerationY * timeElapsed;
+                const frictionDeltaX = frictionX * timeElapsed;
+                const frictionDeltaY = frictionY * timeElapsed;
+
+                balls.forEach((ball, ballIndex) => {
+                    // Update velocities
+                    if (velocityChangeX === 0) {
+                        ball.velocityX = slow(ball.velocityX, frictionDeltaX);
+                    } else {
+                        ball.velocityX += velocityChangeX;
+                        ball.velocityX -= Math.sign(velocityChangeX) * frictionDeltaX;
+                        ball.velocityX = Math.minmax(ball.velocityX, maxVelocity);
+                    }
+
+                    if (velocityChangeY === 0) {
+                        ball.velocityY = slow(ball.velocityY, frictionDeltaY);
+                    } else {
+                        ball.velocityY += velocityChangeY;
+                        ball.velocityY -= Math.sign(velocityChangeY) * frictionDeltaY;
+                        ball.velocityY = Math.minmax(ball.velocityY, maxVelocity);
+                    }
+
+                    ball.nextX = ball.x + ball.velocityX;
+                    ball.nextY = ball.y + ball.velocityY;
+
+                    // Wall collision detection
+                    walls.forEach(wall => {
+                        if (wall.horizontal) {
+                            if (ball.nextY + ballSize/2 >= wall.y - wallW/2 &&
