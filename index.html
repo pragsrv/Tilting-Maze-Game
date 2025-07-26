@@ -349,6 +349,7 @@
                 
                 <div id="ui-panel">
                     <div id="stats">
+                        <div class="stat-item">Level: <span class="stat-value" id="level">1</span></div>
                         <div class="stat-item">Time: <span class="stat-value" id="timer">0:00</span></div>
                         <div class="stat-item">Balls: <span class="stat-value" id="balls-count">0/4</span></div>
                         <div class="stat-item">Best: <span class="stat-value" id="best-time">--:--</span></div>
@@ -416,6 +417,48 @@
             return number > difference ? number - difference : number + difference;
         };
 
+        // Ball-to-ball collision
+        const handleBallCollision = (ball1, ball2) => {
+            const dx = ball2.x - ball1.x;
+            const dy = ball2.y - ball1.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < ballSize) {
+                // Normalize collision vector
+                const nx = dx / distance;
+                const ny = dy / distance;
+                
+                // Separate balls
+                const overlap = ballSize - distance;
+                const separationX = (overlap / 2) * nx;
+                const separationY = (overlap / 2) * ny;
+                
+                ball1.x -= separationX;
+                ball1.y -= separationY;
+                ball2.x += separationX;
+                ball2.y += separationY;
+                
+                // Calculate relative velocity
+                const dvx = ball2.velocityX - ball1.velocityX;
+                const dvy = ball2.velocityY - ball1.velocityY;
+                
+                // Calculate relative velocity in collision normal direction
+                const dvn = dvx * nx + dvy * ny;
+                
+                // Do not resolve if velocities are separating
+                if (dvn > 0) return;
+                
+                // Collision impulse
+                const impulse = 2 * dvn / 2; // Assuming equal mass
+                
+                // Update velocities
+                ball1.velocityX += impulse * nx * 0.8; // Add some energy loss
+                ball1.velocityY += impulse * ny * 0.8;
+                ball2.velocityX -= impulse * nx * 0.8;
+                ball2.velocityY -= impulse * ny * 0.8;
+            }
+        };
+
         // Game elements
         const mazeElement = document.getElementById("maze");
         const joystickHead = document.getElementById("joystick-head");
@@ -424,6 +467,7 @@
         const ballsCountElement = document.getElementById("balls-count");
         const bestTimeElement = document.getElementById("best-time");
         const progressFillElement = document.getElementById("progress-fill");
+        const levelElement = document.getElementById("level");
 
         // Game constants
         const pathW = 25;
@@ -434,83 +478,138 @@
         // Game state
         let gameInProgress = false;
         let hardMode = false;
+        let currentLevel = 1;
         let startTime = null;
         let bestTime = localStorage.getItem('mazeBestTime') || null;
         let mouseStartX, mouseStartY;
         let accelerationX = 0, accelerationY = 0;
         let frictionX = 0, frictionY = 0;
         let previousTimestamp;
+        let levelStartTime = null;
 
         let balls = [];
         let ballElements = [];
         let holeElements = [];
         let walls = [];
 
-        // Wall configuration
-        const wallsConfig = [
-            // Border walls
-            { column: 0, row: 0, horizontal: true, length: 10 },
-            { column: 0, row: 0, horizontal: false, length: 9 },
-            { column: 0, row: 9, horizontal: true, length: 10 },
-            { column: 10, row: 0, horizontal: false, length: 9 },
-            
-            // Interior walls
-            { column: 0, row: 6, horizontal: true, length: 1 },
-            { column: 0, row: 8, horizontal: true, length: 1 },
-            { column: 1, row: 1, horizontal: true, length: 2 },
-            { column: 1, row: 7, horizontal: true, length: 1 },
-            { column: 2, row: 2, horizontal: true, length: 2 },
-            { column: 2, row: 4, horizontal: true, length: 1 },
-            { column: 2, row: 5, horizontal: true, length: 1 },
-            { column: 2, row: 6, horizontal: true, length: 1 },
-            { column: 3, row: 3, horizontal: true, length: 1 },
-            { column: 3, row: 8, horizontal: true, length: 3 },
-            { column: 4, row: 6, horizontal: true, length: 1 },
-            { column: 5, row: 2, horizontal: true, length: 2 },
-            { column: 5, row: 7, horizontal: true, length: 1 },
-            { column: 6, row: 1, horizontal: true, length: 1 },
-            { column: 6, row: 6, horizontal: true, length: 2 },
-            { column: 7, row: 3, horizontal: true, length: 2 },
-            { column: 7, row: 7, horizontal: true, length: 2 },
-            { column: 8, row: 1, horizontal: true, length: 1 },
-            { column: 8, row: 2, horizontal: true, length: 1 },
-            { column: 8, row: 3, horizontal: true, length: 1 },
-            { column: 8, row: 4, horizontal: true, length: 2 },
-            { column: 8, row: 8, horizontal: true, length: 2 },
-            
-            // Vertical walls
-            { column: 1, row: 1, horizontal: false, length: 2 },
-            { column: 1, row: 4, horizontal: false, length: 2 },
-            { column: 2, row: 2, horizontal: false, length: 2 },
-            { column: 2, row: 5, horizontal: false, length: 1 },
-            { column: 2, row: 7, horizontal: false, length: 2 },
-            { column: 3, row: 0, horizontal: false, length: 1 },
-            { column: 3, row: 4, horizontal: false, length: 1 },
-            { column: 3, row: 6, horizontal: false, length: 2 },
-            { column: 4, row: 1, horizontal: false, length: 2 },
-            { column: 4, row: 6, horizontal: false, length: 1 },
-            { column: 5, row: 0, horizontal: false, length: 2 },
-            { column: 5, row: 6, horizontal: false, length: 1 },
-            { column: 5, row: 8, horizontal: false, length: 1 },
-            { column: 6, row: 4, horizontal: false, length: 1 },
-            { column: 6, row: 6, horizontal: false, length: 1 },
-            { column: 7, row: 1, horizontal: false, length: 4 },
-            { column: 7, row: 7, horizontal: false, length: 2 },
-            { column: 8, row: 2, horizontal: false, length: 1 },
-            { column: 8, row: 4, horizontal: false, length: 2 },
-            { column: 9, row: 1, horizontal: false, length: 1 },
-            { column: 9, row: 5, horizontal: false, length: 2 }
-        ];
-
-        const holesConfig = [
-            { column: 0, row: 5 },
-            { column: 2, row: 0 },
-            { column: 2, row: 4 },
-            { column: 4, row: 6 },
-            { column: 6, row: 2 },
-            { column: 6, row: 8 },
-            { column: 8, row: 1 },
-            { column: 8, row: 2 }
+        // Level configurations
+        const levelConfigs = [
+            // Level 1 - Simple maze
+            {
+                walls: [
+                    // Border walls
+                    { column: 0, row: 0, horizontal: true, length: 10 },
+                    { column: 0, row: 0, horizontal: false, length: 9 },
+                    { column: 0, row: 9, horizontal: true, length: 10 },
+                    { column: 10, row: 0, horizontal: false, length: 9 },
+                    // Simple interior walls
+                    { column: 2, row: 2, horizontal: true, length: 2 },
+                    { column: 6, row: 2, horizontal: true, length: 2 },
+                    { column: 2, row: 6, horizontal: true, length: 2 },
+                    { column: 6, row: 6, horizontal: true, length: 2 },
+                    { column: 4, row: 1, horizontal: false, length: 2 },
+                    { column: 4, row: 6, horizontal: false, length: 2 }
+                ],
+                holes: hardMode ? [
+                    { column: 1, row: 1 },
+                    { column: 8, row: 8 }
+                ] : []
+            },
+            // Level 2 - More complex
+            {
+                walls: [
+                    // Border walls
+                    { column: 0, row: 0, horizontal: true, length: 10 },
+                    { column: 0, row: 0, horizontal: false, length: 9 },
+                    { column: 0, row: 9, horizontal: true, length: 10 },
+                    { column: 10, row: 0, horizontal: false, length: 9 },
+                    // Interior walls
+                    { column: 1, row: 1, horizontal: true, length: 2 },
+                    { column: 1, row: 7, horizontal: true, length: 1 },
+                    { column: 2, row: 2, horizontal: true, length: 2 },
+                    { column: 2, row: 4, horizontal: true, length: 1 },
+                    { column: 5, row: 2, horizontal: true, length: 2 },
+                    { column: 6, row: 6, horizontal: true, length: 2 },
+                    { column: 7, row: 3, horizontal: true, length: 2 },
+                    { column: 1, row: 1, horizontal: false, length: 2 },
+                    { column: 4, row: 1, horizontal: false, length: 2 },
+                    { column: 7, row: 1, horizontal: false, length: 4 },
+                    { column: 3, row: 6, horizontal: false, length: 2 },
+                    { column: 6, row: 4, horizontal: false, length: 1 }
+                ],
+                holes: hardMode ? [
+                    { column: 2, row: 0 },
+                    { column: 4, row: 6 },
+                    { column: 8, row: 2 }
+                ] : []
+            },
+            // Level 3 - Original complex maze
+            {
+                walls: [
+                    // Border walls
+                    { column: 0, row: 0, horizontal: true, length: 10 },
+                    { column: 0, row: 0, horizontal: false, length: 9 },
+                    { column: 0, row: 9, horizontal: true, length: 10 },
+                    { column: 10, row: 0, horizontal: false, length: 9 },
+                    
+                    // Interior walls
+                    { column: 0, row: 6, horizontal: true, length: 1 },
+                    { column: 0, row: 8, horizontal: true, length: 1 },
+                    { column: 1, row: 1, horizontal: true, length: 2 },
+                    { column: 1, row: 7, horizontal: true, length: 1 },
+                    { column: 2, row: 2, horizontal: true, length: 2 },
+                    { column: 2, row: 4, horizontal: true, length: 1 },
+                    { column: 2, row: 5, horizontal: true, length: 1 },
+                    { column: 2, row: 6, horizontal: true, length: 1 },
+                    { column: 3, row: 3, horizontal: true, length: 1 },
+                    { column: 3, row: 8, horizontal: true, length: 3 },
+                    { column: 4, row: 6, horizontal: true, length: 1 },
+                    { column: 5, row: 2, horizontal: true, length: 2 },
+                    { column: 5, row: 7, horizontal: true, length: 1 },
+                    { column: 6, row: 1, horizontal: true, length: 1 },
+                    { column: 6, row: 6, horizontal: true, length: 2 },
+                    { column: 7, row: 3, horizontal: true, length: 2 },
+                    { column: 7, row: 7, horizontal: true, length: 2 },
+                    { column: 8, row: 1, horizontal: true, length: 1 },
+                    { column: 8, row: 2, horizontal: true, length: 1 },
+                    { column: 8, row: 3, horizontal: true, length: 1 },
+                    { column: 8, row: 4, horizontal: true, length: 2 },
+                    { column: 8, row: 8, horizontal: true, length: 2 },
+                    
+                    // Vertical walls
+                    { column: 1, row: 1, horizontal: false, length: 2 },
+                    { column: 1, row: 4, horizontal: false, length: 2 },
+                    { column: 2, row: 2, horizontal: false, length: 2 },
+                    { column: 2, row: 5, horizontal: false, length: 1 },
+                    { column: 2, row: 7, horizontal: false, length: 2 },
+                    { column: 3, row: 0, horizontal: false, length: 1 },
+                    { column: 3, row: 4, horizontal: false, length: 1 },
+                    { column: 3, row: 6, horizontal: false, length: 2 },
+                    { column: 4, row: 1, horizontal: false, length: 2 },
+                    { column: 4, row: 6, horizontal: false, length: 1 },
+                    { column: 5, row: 0, horizontal: false, length: 2 },
+                    { column: 5, row: 6, horizontal: false, length: 1 },
+                    { column: 5, row: 8, horizontal: false, length: 1 },
+                    { column: 6, row: 4, horizontal: false, length: 1 },
+                    { column: 6, row: 6, horizontal: false, length: 1 },
+                    { column: 7, row: 1, horizontal: false, length: 4 },
+                    { column: 7, row: 7, horizontal: false, length: 2 },
+                    { column: 8, row: 2, horizontal: false, length: 1 },
+                    { column: 8, row: 4, horizontal: false, length: 2 },
+                    { column: 9, row: 1, horizontal: false, length: 1 },
+                    { column: 9, row: 5, horizontal: false, length: 2 }
+                ],
+                holes: hardMode ? [
+                    { column: 0, row: 5 },
+                    { column: 2, row: 0 },
+                    { column: 2, row: 4 },
+                    { column: 4, row: 6 },
+                    { column: 6, row: 2 },
+                    { column: 6, row: 8 },
+                    { column: 8, row: 1 },
+                    { column: 8, row: 2 }
+                ] : []
+            }
         ];
 
         function updateBestTime() {
@@ -545,9 +644,38 @@
             return ballsInCenter;
         }
 
+        function nextLevel() {
+            if (currentLevel < levelConfigs.length) {
+                currentLevel++;
+                levelElement.textContent = currentLevel;
+                
+                // Show level transition message
+                noteElement.className = 'success';
+                noteElement.innerHTML = `
+                    🎉 Level ${currentLevel}! 🎉
+                    <p>Get ready for more challenge!</p>
+                    <div class="controls-hint">Click joystick to continue</div>
+                `;
+                
+                setTimeout(() => {
+                    resetGame();
+                }, 2000);
+            } else {
+                // Game completed
+                gameInProgress = false;
+                noteElement.className = 'success';
+                noteElement.innerHTML = `
+                    🏆 GAME COMPLETED! 🏆
+                    <p>You finished all levels!</p>
+                    <div class="controls-hint">Space: Play Again</div>
+                `;
+            }
+        }
+
         function resetGame() {
             gameInProgress = false;
             startTime = null;
+            levelStartTime = null;
             previousTimestamp = undefined;
             mouseStartX = undefined;
             mouseStartY = undefined;
@@ -569,8 +697,11 @@
             joystickHead.style.transform = '';
             joystickHead.classList.add('glow-animation');
 
+            // Get current level configuration
+            const levelConfig = levelConfigs[currentLevel - 1] || levelConfigs[0];
+
             // Create walls
-            walls = wallsConfig.map(wall => ({
+            walls = levelConfig.walls.map(wall => ({
                 x: wall.column * (pathW + wallW),
                 y: wall.row * (pathW + wallW),
                 horizontal: wall.horizontal,
@@ -613,9 +744,9 @@
                 ballElements.push(ballEl);
             });
 
-            // Create holes in hard mode
-            if (hardMode) {
-                holesConfig.forEach(hole => {
+            // Create holes if in hard mode
+            if (hardMode && levelConfig.holes) {
+                levelConfig.holes.forEach(hole => {
                     const x = hole.column * (wallW + pathW) + (wallW / 2 + pathW / 2);
                     const y = hole.row * (wallW + pathW) + (wallW / 2 + pathW / 2);
                     
@@ -659,6 +790,7 @@
                 mouseStartY = clientY;
                 gameInProgress = true;
                 startTime = Date.now();
+                levelStartTime = Date.now();
                 joystickHead.classList.remove('glow-animation');
                 requestAnimationFrame(gameLoop);
                 updateUI();
@@ -702,14 +834,20 @@
 
             switch(key) {
                 case " ":
+                    currentLevel = 1;
+                    levelElement.textContent = currentLevel;
                     resetGame();
                     break;
                 case "h":
                     hardMode = true;
+                    currentLevel = 1;
+                    levelElement.textContent = currentLevel;
                     resetGame();
                     break;
                 case "e":
                     hardMode = false;
+                    currentLevel = 1;
+                    levelElement.textContent = currentLevel;
                     resetGame();
                     break;
             }
@@ -848,27 +986,41 @@
                         }
                     });
 
-                    // Check hole collisions in hard mode
-                    if (hardMode) {
-                        holesConfig.forEach((holeConfig, holeIndex) => {
+                    // Update ball position
+                    ball.x = ball.nextX;
+                    ball.y = ball.nextY;
+                });
+
+                // Handle ball-to-ball collisions
+                for (let i = 0; i < balls.length; i++) {
+                    for (let j = i + 1; j < balls.length; j++) {
+                        handleBallCollision(balls[i], balls[j]);
+                    }
+                }
+
+                // Check hole collisions in hard mode
+                if (hardMode) {
+                    const levelConfig = levelConfigs[currentLevel - 1] || levelConfigs[0];
+                    if (levelConfig.holes) {
+                        levelConfig.holes.forEach((holeConfig, holeIndex) => {
                             const holeX = holeConfig.column * (wallW + pathW) + (wallW / 2 + pathW / 2);
                             const holeY = holeConfig.row * (wallW + pathW) + (wallW / 2 + pathW / 2);
-                            const distance = distance2D({ x: holeX, y: holeY }, { x: ball.nextX, y: ball.nextY });
                             
-                            if (distance <= holeSize/2) {
-                                if (holeElements[holeIndex]) {
-                                    holeElements[holeIndex].classList.add('danger');
+                            balls.forEach(ball => {
+                                const distance = distance2D({ x: holeX, y: holeY }, ball);
+                                if (distance <= holeSize/2) {
+                                    if (holeElements[holeIndex]) {
+                                        holeElements[holeIndex].classList.add('danger');
+                                    }
+                                    throw new Error("Ball fell into hole");
                                 }
-                                throw new Error("Ball fell into hole");
-                            }
+                            });
                         });
                     }
+                }
 
-                    // Update ball position
-                    ball.x += ball.velocityX;
-                    ball.y += ball.velocityY;
-
-                    // Check if ball is in center and update visual
+                // Update ball element positions and check center status
+                balls.forEach((ball, ballIndex) => {
                     const centerDistance = distance2D(ball, { x: 200, y: 180 });
                     const inCenter = centerDistance < 35;
                     
@@ -878,7 +1030,6 @@
                         ballElements[ballIndex].classList.remove('in-center');
                     }
 
-                    // Update ball element position
                     ballElements[ballIndex].style.left = `${ball.x}px`;
                     ballElements[ballIndex].style.top = `${ball.y}px`;
                 });
@@ -888,22 +1039,38 @@
                 
                 if (ballsInCenter === balls.length) {
                     gameInProgress = false;
-                    const currentTime = Math.floor((Date.now() - startTime) / 1000);
+                    const levelTime = Math.floor((Date.now() - levelStartTime) / 1000);
+                    const totalTime = Math.floor((Date.now() - startTime) / 1000);
                     let isNewRecord = false;
                     
-                    if (!bestTime || currentTime < bestTime) {
-                        bestTime = currentTime;
+                    if (!bestTime || totalTime < bestTime) {
+                        bestTime = totalTime;
                         localStorage.setItem('mazeBestTime', bestTime);
                         updateBestTime();
                         isNewRecord = true;
                     }
                     
-                    noteElement.className = 'success';
-                    noteElement.innerHTML = `
-                        🎉 Congratulations! 🎉
-                        <p>Time: ${timerElement.textContent}${isNewRecord ? ' (NEW RECORD!)' : ''}</p>
-                        <div class="controls-hint">Space: Play Again | ${hardMode ? 'E: Easy Mode' : 'H: Hard Mode'}</div>
-                    `;
+                    if (currentLevel < levelConfigs.length) {
+                        // Level completed, advance to next level
+                        noteElement.className = 'success';
+                        noteElement.innerHTML = `
+                            🎉 Level ${currentLevel} Complete! 🎉
+                            <p>Level Time: ${Math.floor(levelTime / 60)}:${(levelTime % 60).toString().padStart(2, '0')}</p>
+                            <div class="controls-hint">Advancing to Level ${currentLevel + 1}...</div>
+                        `;
+                        
+                        setTimeout(() => {
+                            nextLevel();
+                        }, 2000);
+                    } else {
+                        // All levels completed
+                        noteElement.className = 'success';
+                        noteElement.innerHTML = `
+                            🏆 ALL LEVELS COMPLETED! 🏆
+                            <p>Total Time: ${timerElement.textContent}${isNewRecord ? ' (NEW RECORD!)' : ''}</p>
+                            <div class="controls-hint">Space: Play Again | ${hardMode ? 'E: Easy Mode' : 'H: Hard Mode'}</div>
+                        `;
+                    }
                     
                     return;
                 }
