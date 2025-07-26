@@ -757,4 +757,206 @@
                     // Wall collision detection
                     walls.forEach(wall => {
                         if (wall.horizontal) {
-                            if (ball.nextY + ballSize/2 >= wall.y - wallW/2 &&
+                            if (ball.nextY + ballSize/2 >= wall.y - wallW/2 && 
+                                ball.nextY - ballSize/2 <= wall.y + wallW/2) {
+                                
+                                const wallStart = { x: wall.x, y: wall.y };
+                                const wallEnd = { x: wall.x + wall.length, y: wall.y };
+
+                                // Left cap collision
+                                if (ball.nextX + ballSize/2 >= wallStart.x - wallW/2 && ball.nextX < wallStart.x) {
+                                    const distance = distance2D(wallStart, { x: ball.nextX, y: ball.nextY });
+                                    if (distance < ballSize/2 + wallW/2) {
+                                        const closest = closestItCanBe(wallStart, { x: ball.nextX, y: ball.nextY });
+                                        const rolled = rollAroundCap(wallStart, {
+                                            x: closest.x, y: closest.y,
+                                            velocityX: ball.velocityX, velocityY: ball.velocityY
+                                        });
+                                        Object.assign(ball, rolled);
+                                    }
+                                }
+
+                                // Right cap collision
+                                if (ball.nextX - ballSize/2 <= wallEnd.x + wallW/2 && ball.nextX > wallEnd.x) {
+                                    const distance = distance2D(wallEnd, { x: ball.nextX, y: ball.nextY });
+                                    if (distance < ballSize/2 + wallW/2) {
+                                        const closest = closestItCanBe(wallEnd, { x: ball.nextX, y: ball.nextY });
+                                        const rolled = rollAroundCap(wallEnd, {
+                                            x: closest.x, y: closest.y,
+                                            velocityX: ball.velocityX, velocityY: ball.velocityY
+                                        });
+                                        Object.assign(ball, rolled);
+                                    }
+                                }
+
+                                // Wall body collision
+                                if (ball.nextX >= wallStart.x && ball.nextX <= wallEnd.x) {
+                                    if (ball.nextY < wall.y) {
+                                        ball.nextY = wall.y - wallW/2 - ballSize/2;
+                                    } else {
+                                        ball.nextY = wall.y + wallW/2 + ballSize/2;
+                                    }
+                                    ball.y = ball.nextY;
+                                    ball.velocityY = -ball.velocityY * 0.4;
+                                }
+                            }
+                        } else {
+                            // Vertical wall collision
+                            if (ball.nextX + ballSize/2 >= wall.x - wallW/2 && 
+                                ball.nextX - ballSize/2 <= wall.x + wallW/2) {
+                                
+                                const wallStart = { x: wall.x, y: wall.y };
+                                const wallEnd = { x: wall.x, y: wall.y + wall.length };
+
+                                // Top cap collision
+                                if (ball.nextY + ballSize/2 >= wallStart.y - wallW/2 && ball.nextY < wallStart.y) {
+                                    const distance = distance2D(wallStart, { x: ball.nextX, y: ball.nextY });
+                                    if (distance < ballSize/2 + wallW/2) {
+                                        const closest = closestItCanBe(wallStart, { x: ball.nextX, y: ball.nextY });
+                                        const rolled = rollAroundCap(wallStart, {
+                                            x: closest.x, y: closest.y,
+                                            velocityX: ball.velocityX, velocityY: ball.velocityY
+                                        });
+                                        Object.assign(ball, rolled);
+                                    }
+                                }
+
+                                // Bottom cap collision
+                                if (ball.nextY - ballSize/2 <= wallEnd.y + wallW/2 && ball.nextY > wallEnd.y) {
+                                    const distance = distance2D(wallEnd, { x: ball.nextX, y: ball.nextY });
+                                    if (distance < ballSize/2 + wallW/2) {
+                                        const closest = closestItCanBe(wallEnd, { x: ball.nextX, y: ball.nextY });
+                                        const rolled = rollAroundCap(wallEnd, {
+                                            x: closest.x, y: closest.y,
+                                            velocityX: ball.velocityX, velocityY: ball.velocityY
+                                        });
+                                        Object.assign(ball, rolled);
+                                    }
+                                }
+
+                                // Wall body collision
+                                if (ball.nextY >= wallStart.y && ball.nextY <= wallEnd.y) {
+                                    if (ball.nextX < wall.x) {
+                                        ball.nextX = wall.x - wallW/2 - ballSize/2;
+                                    } else {
+                                        ball.nextX = wall.x + wallW/2 + ballSize/2;
+                                    }
+                                    ball.x = ball.nextX;
+                                    ball.velocityX = -ball.velocityX * 0.4;
+                                }
+                            }
+                        }
+                    });
+
+                    // Check hole collisions in hard mode
+                    if (hardMode) {
+                        holesConfig.forEach((holeConfig, holeIndex) => {
+                            const holeX = holeConfig.column * (wallW + pathW) + (wallW / 2 + pathW / 2);
+                            const holeY = holeConfig.row * (wallW + pathW) + (wallW / 2 + pathW / 2);
+                            const distance = distance2D({ x: holeX, y: holeY }, { x: ball.nextX, y: ball.nextY });
+                            
+                            if (distance <= holeSize/2) {
+                                if (holeElements[holeIndex]) {
+                                    holeElements[holeIndex].classList.add('danger');
+                                }
+                                throw new Error("Ball fell into hole");
+                            }
+                        });
+                    }
+
+                    // Update ball position
+                    ball.x += ball.velocityX;
+                    ball.y += ball.velocityY;
+
+                    // Check if ball is in center and update visual
+                    const centerDistance = distance2D(ball, { x: 200, y: 180 });
+                    const inCenter = centerDistance < 35;
+                    
+                    if (inCenter) {
+                        ballElements[ballIndex].classList.add('in-center');
+                    } else {
+                        ballElements[ballIndex].classList.remove('in-center');
+                    }
+
+                    // Update ball element position
+                    ballElements[ballIndex].style.left = `${ball.x}px`;
+                    ballElements[ballIndex].style.top = `${ball.y}px`;
+                });
+
+                // Check win condition
+                const ballsInCenter = updateProgress();
+                
+                if (ballsInCenter === balls.length) {
+                    gameInProgress = false;
+                    const currentTime = Math.floor((Date.now() - startTime) / 1000);
+                    let isNewRecord = false;
+                    
+                    if (!bestTime || currentTime < bestTime) {
+                        bestTime = currentTime;
+                        localStorage.setItem('mazeBestTime', bestTime);
+                        updateBestTime();
+                        isNewRecord = true;
+                    }
+                    
+                    noteElement.className = 'success';
+                    noteElement.innerHTML = `
+                        🎉 Congratulations! 🎉
+                        <p>Time: ${timerElement.textContent}${isNewRecord ? ' (NEW RECORD!)' : ''}</p>
+                        <div class="controls-hint">Space: Play Again | ${hardMode ? 'E: Easy Mode' : 'H: Hard Mode'}</div>
+                    `;
+                    
+                    return;
+                }
+
+                updateTimer();
+                previousTimestamp = timestamp;
+                requestAnimationFrame(gameLoop);
+
+            } catch (error) {
+                if (error.message === "Ball fell into hole") {
+                    gameInProgress = false;
+                    noteElement.className = 'danger';
+                    noteElement.innerHTML = `
+                        💀 Game Over! 💀
+                        <p>A ball fell into a black hole!</p>
+                        <div class="controls-hint">Space: Try Again | E: Easy Mode</div>
+                    `;
+                } else {
+                    console.error(error);
+                }
+            }
+        }
+
+        // Touch event handling
+        window.addEventListener("touchend", function(event) {
+            if (gameInProgress) {
+                event.preventDefault();
+            }
+        });
+
+        // Prevent context menu on mobile
+        window.addEventListener("contextmenu", function(event) {
+            event.preventDefault();
+        });
+
+        // Pause game when tab becomes hidden
+        document.addEventListener("visibilitychange", function() {
+            if (document.hidden && gameInProgress) {
+                gameInProgress = false;
+                noteElement.innerHTML = `
+                    ⏸️ Game Paused
+                    <p>Click joystick to resume</p>
+                    <div class="controls-hint">Space: Reset</div>
+                `;
+            }
+        });
+
+        // Timer update interval
+        setInterval(updateTimer, 100);
+
+        // Initialize game
+        updateBestTime();
+        resetGame();
+    </script>
+</body>
+</html>
