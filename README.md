@@ -2,6 +2,10 @@
 
 A fun and interactive tilting maze game built with [mention technologies, e.g., JavaScript, HTML5, etc.]. Control the ball by tilting your device or using keyboard arrows to navigate through the maze and reach the goal!
 
+
+> This game was built by also taking help from Claude and Perplexity ai
+
+
 ![20250731-1928-38 7528494-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/7d11291c-d884-4dd1-92ba-55908458c7fd)
 
 ## Features
