@@ -486,6 +486,8 @@
         let frictionX = 0, frictionY = 0;
         let previousTimestamp;
         let levelStartTime = null;
+        let keyboardJoystickX = 0;
+        let keyboardJoystickY = 0;
 
         let balls = [];
         let ballElements = [];
@@ -683,6 +685,8 @@
             accelerationY = 0;
             frictionX = 0;
             frictionY = 0;
+            keyboardJoystickX = 0;
+            keyboardJoystickY = 0;
 
             // Clear existing elements
             ballElements.forEach(el => el.remove());
@@ -826,30 +830,96 @@
             frictionY = gravity * Math.cos((rotationX / 180) * Math.PI) * friction;
         }
 
+        // Keyboard controls for joystick
+        const keysPressed = {};
+        
         window.addEventListener("keydown", function(event) {
             const key = event.key.toLowerCase();
             
-            if (![" ", "h", "e"].includes(key)) return;
-            event.preventDefault();
-
-            switch(key) {
-                case " ":
+            // Prevent default for arrow keys to avoid page scrolling
+            if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
+                event.preventDefault();
+            }
+            
+            keysPressed[key] = true;
+            
+            if (!gameInProgress) {
+                if (key === ' ') {
                     currentLevel = 1;
                     levelElement.textContent = currentLevel;
                     resetGame();
-                    break;
-                case "h":
+                } else if (key === 'h') {
                     hardMode = true;
                     currentLevel = 1;
                     levelElement.textContent = currentLevel;
                     resetGame();
-                    break;
-                case "e":
+                } else if (key === 'e') {
                     hardMode = false;
                     currentLevel = 1;
                     levelElement.textContent = currentLevel;
                     resetGame();
-                    break;
+                }
+                return;
+            }
+            
+            // Handle keyboard joystick movement
+            const joystickSpeed = 2;
+            
+            if (key === 'arrowup') {
+                keyboardJoystickY = -20;
+            } else if (key === 'arrowdown') {
+                keyboardJoystickY = 20;
+            } else if (key === 'arrowleft') {
+                keyboardJoystickX = -20;
+            } else if (key === 'arrowright') {
+                keyboardJoystickX = 20;
+            }
+            
+            if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+                joystickHead.style.transform = `translate(${keyboardJoystickX}px, ${keyboardJoystickY}px)`;
+                
+                const rotationY = keyboardJoystickX * 0.6;
+                const rotationX = keyboardJoystickY * 0.6;
+                
+                mazeElement.style.transform = `rotateY(${rotationY}deg) rotateX(${-rotationX}deg)`;
+                
+                const gravity = 1.8;
+                const friction = 0.015;
+                
+                accelerationX = gravity * Math.sin((rotationY / 180) * Math.PI);
+                accelerationY = gravity * Math.sin((rotationX / 180) * Math.PI);
+                frictionX = gravity * Math.cos((rotationY / 180) * Math.PI) * friction;
+                frictionY = gravity * Math.cos((rotationX / 180) * Math.PI) * friction;
+            }
+        });
+
+        window.addEventListener("keyup", function(event) {
+            const key = event.key.toLowerCase();
+            keysPressed[key] = false;
+            
+            // Reset keyboard joystick position when keys are released
+            if (key === 'arrowup' || key === 'arrowdown') {
+                keyboardJoystickY = 0;
+            }
+            if (key === 'arrowleft' || key === 'arrowright') {
+                keyboardJoystickX = 0;
+            }
+            
+            if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+                joystickHead.style.transform = `translate(${keyboardJoystickX}px, ${keyboardJoystickY}px)`;
+                
+                const rotationY = keyboardJoystickX * 0.6;
+                const rotationX = keyboardJoystickY * 0.6;
+                
+                mazeElement.style.transform = `rotateY(${rotationY}deg) rotateX(${-rotationX}deg)`;
+                
+                const gravity = 1.8;
+                const friction = 0.015;
+                
+                accelerationX = gravity * Math.sin((rotationY / 180) * Math.PI);
+                accelerationY = gravity * Math.sin((rotationX / 180) * Math.PI);
+                frictionX = gravity * Math.cos((rotationY / 180) * Math.PI) * friction;
+                frictionY = gravity * Math.cos((rotationX / 180) * Math.PI) * friction;
             }
         });
 
